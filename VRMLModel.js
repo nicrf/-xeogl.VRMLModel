@@ -202,9 +202,13 @@
 			if (geometrysInfo) {
 				if (Array.isArray(geometrysInfo)){
 					// group?
+					var group = new xeogl.Group();
 					for (var i = 0, len = materialsInfo.length; i < len; i++) {
 						var geometry = getGeometry(geometrysInfo[i]);
+						group.addChild(geometry);
+						model._addComponent(geometry);	
 					}
+					return group;							
 				} else {
 					return getGeometry(geometrysInfo);
 				}
@@ -264,128 +268,17 @@
 						indices:  indices
 					});
 				}
-			} else if (data.node === 'IndexedFaceSet') {	//To be done			
-				var normals = data.normalIndex;
-				var colors = data.colorIndex;
-				var positions = [];
-				var indices;
+			} else if (data.node === 'IndexedFaceSet') {	//To be done
 				
-				for (var i = 0; i < data.coord.point.length; i ++ ) {
-					positions.push(data.coord.point[i].x,data.coord.point[i].y,data.coord.point[i].z);
-				}
-				
-				if (data.ccw === undefined )
-					data.ccw = true; 
-				indices = data.coordIndex.toString().split(","); 	
-				if (data.coordIndex) {
-				//	if (data.ccw) {					
-						indices = data.coordIndex.toString().split(","); 
-				/*	} else {
-						indices = data.coordIndex.reverse().toString().split(","); 	
-					}*/					
-				} else {
-					indices = new Int32Array(positions.length / 3);
-					for (var ni = 0, len = indices.length; ni < len; ni++) {
-						indices[ni] = ni;
-					}
-				}
-	
-				if ( data.normalIndex) {
-					normals  = data.normalIndex;
-				} else {
-					normals = indices;
-				}
-				//normals = normals && normals.length > 0 ? normals : null;
-				colors = colors && colors.length > 0 ? colors : null;
-
-				if (false) {
-					xeogl.math.faceToVertexNormals(positions, normals);
-				}
-				
-				var primitive = "triangles";
-				/*if (data.solid && data.solid===true )
-					primitive = "triangle-strip";*/
-					
-				return new xeogl.Geometry({
-					primitive: primitive,
-					positions: positions,
-					//normals: normals,
-					// autoVertexNormals: !normals,
-					//colors: colors,
-					indices: indices
-				});
-				// some shapes only have vertices for use in other shapes
-				/*if (data.coordIndex) {
-					var newPositions = [];
-					var newUvs = [];
-					position = {x:0,y:0,z:0};
-					uv = {x:0,y:0};
-					for ( i = 0, il = data.coordIndex.length; i < il; i ++ ) {
-						var indexes = data.coordIndex[ i ];
-						// VRML support multipoint indexed face sets (more then 3 vertices). You must calculate the composing triangles here
-						skip = 0;
-						while ( indexes.length >= 3 && skip < ( indexes.length - 2 ) ) {
-							if (data.ccw === undefined )
-								data.ccw = true; // ccw is true by default
-							var i1 = indexes[ 0 ];
-							var i2 = indexes[ skip + ( data.ccw ? 1 : 2 ) ];
-							var i3 = indexes[ skip + ( data.ccw ? 2 : 1 ) ];
-							// create non indexed geometry, necessary for face normal generation
-							newPositions.push( position.x + i1 * 3, position.y + i1 * 3, position.z + i1 * 3 );
-							newPositions.push( position.x + i2 * 3, position.y + i2 * 3, position.z + i2 * 3 );
-							newPositions.push( position.x + i3 * 3, position.y + i3 * 3, position.z + i3 * 3 );							
-							newUvs.push( uv.x + i1 * 2, uv.y + i1 * 2);
-							newUvs.push( uv.x + i2 * 2, uv.y + i2 * 2 );
-							newUvs.push( uv.x + i3 * 2, uv.y + i3 * 2);
-							skip ++;
-						}
-					}
-					positions = newPositions;
-					uvs = newUvs;
-				} 
-				
-				return new xeogl.Geometry({
-				// The primitive type - allowed values are
-				// "points", "lines", "line-loop", "line-strip",
-				// "triangles", "triangle-strip" and "triangle-fan".
-				//
-				// See the OpenGL/WebGL specification docs for
-				// how the coordinate arrays are supposed to be laid out.
-				primitive: "triangles",
-				// The vertices - eight for our cube, each
-				// one spanning three array elements for X,Y and Z
-				positions: positions,
-				// Normal vectors, one for each vertex
-				//normals: [
-				//],
-				// UV coords
-				uv: uvs,
-				// Color for each vertex
-				//colors: [
-				//],
-				// Indices - these organise the
-				// positions and uv texture coordinates
-				// into geometric primitives in accordance
-				// with the "primitive" parameter,
-				// in this case a set of three indices
-				// for each triangle.
-				//
-				// Note that each triangle is specified
-				// in counter-clockwise winding order.
-				//
-				// You can specify them in clockwise
-				// order if you configure the Material
-				// frontface property as "cw", instead
-				// of the default "ccw".
-				//indices: 
-				});*/
+				return parseIndexedFaceSet(data);				
 			}
 		}		
-	
+
 		function parseIndexedFaceSet(node){
 			var indexes, uvIndexes, uvs;
 			var vec;
 			var vertices = [];
+			var normals = [];
 			var faces = [];
 			var faceVertexUvs = [];
 			if ( data.texCoord) {
@@ -398,8 +291,9 @@
 				}
 				for ( var k = 0, l = node.coord.point.length; k < l; k ++ ) {
 					var point = node.coord.point[ k ];
-					vec = [point.x, point.y, point.z];
-					vertices.push(vec);
+					//vec = [point.x, point.y, point.z];
+					vertices.push(point.x, point.y, point.z);
+					normals.push(0,0,0);
 				}
 			}
 
@@ -409,7 +303,7 @@
 				// read this: http://math.hws.edu/eck/cs424/notes2013/16_Threejs_Advanced.html
 				for ( var i = 0, j = node.coordIndex.length; i < j; i ++ ) {
 					indexes = node.coordIndex[ i ];
-					if ( node.texCoordIndex) {
+					if ( node.texCoordIndex && node.texCoordIndex.length && node.texCoordIndex.length>0) {
 						uvIndexes = node.texCoordIndex[ i ];
 					} else {
 						// default texture coord index
@@ -430,28 +324,25 @@
 							null // normal, will be added later
 							// todo: pass in the color, if a color index is present
 						];
+						//normals.push(math.norm(math.cross([b-a],[c-a])));
 						//this.log(face);
 						// @todo: this code might have to move till after vertices have been duplicated for sharp edge rendering
 						if ( uvs && uvIndexes ) {
-							faceVertexUvs.push([
-								[
+							faceVertexUvs.push(								
 									uvs[ uvIndexes[ 0 ] ].x,
-									uvs[ uvIndexes[ 0 ] ].y
-								],
-								[
+									uvs[ uvIndexes[ 0 ] ].y							
+								,								
 									uvs[ uvIndexes[ skip + (node.ccw ? 1 : 2) ] ].x,
 									uvs[ uvIndexes[ skip + (node.ccw ? 1 : 2) ] ].y
-								],
-								[
+								,								
 									uvs[ uvIndexes[ skip + (node.ccw ? 2 : 1) ] ].x,
-									uvs[ uvIndexes[ skip + (node.ccw ? 2 : 1) ] ].y
-								]
-							]);
+									uvs[ uvIndexes[ skip + (node.ccw ? 2 : 1) ] ].y								
+							);
 						} else {
-							//this.log('Missing either uvs or indexes');
+							console.log('Missing either uvs or indexes');
 						}
 						skip ++;
-						faces.push(face);
+						faces.push(a,b,c);
 
 					}
 
@@ -467,24 +358,38 @@
 				//xeogl.math.faceToVertexNormals(positions, creaseAngle);
 			} else {
 				// only compute face normals, perform no smoothing
-				//object.computeFaceNormals();
+				//var cb =  new Float32Array([0,0,0]), ab =  new Float32Array([0,0,0]);
+				//Flat shading normals
+				//For each triangle ABC
+				/*for ( var k = 0, l = faces.length; k < l; k +=1 ) {
+					var face = faces[ k ];
+					var vA = [vertices[ face ], vertices[ face + 1 ] , vertices[ face + 2 ]];
+					var vB = [vertices[ face ], vertices[ face + 1 ] , vertices[ face + 2 ]]
+					var vC = [vertices[ face ], vertices[ face + 1 ] , vertices[ face + 2 ]]; //cross = [ a2 * b3 - a3 * b2, a3 * b1 - a1 * b3, a1 * b2 - a2 * b1 ]
+					var n = math.cross([1, 1, 0],   [0, 1, 1]) 
+				}*/	
 			}			
-			if (Array.isArray(vertices))
-				vertices.join().split(",");
-			if (Array.isArray(faces))
-				faces.join().split(",");
-			if (Array.isArray(indexes))
-				indexes.join().split(",");
-			if (indexes && indexes.lenght > 0) 
+			console.log(vertices);
+			console.log(faces);
+			console.log(faceVertexUvs);
+			console.log(indexes);
+			if (indexes && indexes!= -1)
+				indices = new Uint16Array(indexes);		
+
+			
+			if (indexes && indexes != -1)
 			return new xeogl.Geometry(model, {
 				primitive: "triangles",
-				positions: vertices,
-				normals: faces,
-				// autoVertexNormals: !normals,
+				quantized: false, // Not compressed
+				positions: new Float32Array(vertices),
+				normals: new Float32Array(uvs),
+				//normals: normals && normals.length > 0 ? normals : null,
+				autoNormals: true, //!normals || normals.length === 0,
+				uv: new Float32Array(faceVertexUvs),
+				autoVertexNormals: true,
 				//colors: colors,
-				indices: indexes
+				indices: new Uint16Array(faces)
 			});
-			//object.computeBoundingSphere();
 		}
 		
 		
@@ -548,8 +453,8 @@
 						object.scale = [ s.x, s.y, s.z ];
 					}
 					if (data.name) {
-						object.id = data.name;
-						defines[ object.id ] = object;
+						//object.id = data.name;
+						//defines[ object.id ] = object;
 					}
 					parent.addChild(object, false); // Don't automatically inherit properties
 					model._addComponent(object);
@@ -593,86 +498,16 @@
 		for ( var i = 0, l = tree.length; i < l; i ++ ) {
 			parseNode(tree[i],model,model);
 		}
+		/*jQuery.each(tree.nodeDefinitions, function() {
+			console.log(this.name);
+			parseNode(this,model,model);
+		});*/
+		//forEach
 
        // return ;
 
     }
 
-
-//--------------------------------------------------------------------------------------------
-// Creates meshes from parsed state
-//--------------------------------------------------------------------------------------------
-
-    var createMeshes = (function () {
-
-        return function (model, state) {
-
-            for (var j = 0, k = state.objects.length; j < k; j++) {
-
-                var object = state.objects[j];
-                var geometry = object.geometry;
-                var isLine = ( geometry.type === 'Line' );
-
-                if (geometry.positions.length === 0) {
-                    // Skip o/g line declarations that did not follow with any faces
-                    continue;
-                }
-
-                var geometryCfg = {
-                    primitive: "triangles"
-                };
-
-                geometryCfg.positions = geometry.positions;
-
-                if (geometry.normals.length > 0) {
-                    geometryCfg.normals = geometry.normals;
-                } else {
-                    geometryCfg.autoVertexNormals = true;
-                }
-
-                if (geometry.uv.length > 0) {
-                    geometryCfg.uv = geometry.uv;
-                }
-
-                var indices = new Array(geometryCfg.positions.length / 3); // Triangle soup
-                for (var idx = 0; idx < indices.length; idx++) {
-                    indices[idx] = idx;
-                }
-                geometryCfg.indices = indices;
-
-                var xeoGeometry = new xeogl.Geometry(model, geometryCfg);
-                model._addComponent(xeoGeometry);
-
-                var materialId = object.material.id;
-                var material;
-                if (materialId && materialId !== "") {
-                    material = model.scene.components[materialId];
-                    if (!material) {
-                        model.error("Material not found: " + materialId);
-                    }
-                } else {
-                    material = new xeogl.PhongMaterial(model, {
-                        //emissive: [0.6, 0.6, 0.0],
-                        diffuse: [0.6, 0.6, 0.6],
-                        backfaces: true
-                    });
-                    model._addComponent(material);
-                }
-
-                // material.emissive = [Math.random(), Math.random(), Math.random()];
-
-                var mesh = new xeogl.Mesh(model, {
-                    id: model.id + "#" + object.id,
-                    geometry: xeoGeometry,
-                    material: material,
-                    pickable: true
-                });
-
-                model.addChild(mesh);
-                model._addComponent(mesh);
-            }
-        };
-    })();
 
     function loadFile(url, ok, err) {
         var request = new XMLHttpRequest();
