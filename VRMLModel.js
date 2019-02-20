@@ -269,130 +269,46 @@
 					});
 				}
 			} else if (data.node === 'IndexedFaceSet') {	//To be done
-				
-				return parseIndexedFaceSet(data);				
+				var positions = [];
+				var indices = [];
+				var faces = [];
+				if (data.coord) {
+
+					for (var i = 0; i < data.coord.point.length; i ++ ) {
+						positions.push(data.coord.point[i].x,data.coord.point[i].y,data.coord.point[i].z);
+					}
+					/*for (var i = 0; i < data.coordIndex.length; i ++ ) {
+						indices.push(data.coordIndex[i].join(", "));
+					}*/
+					if (data.ccw && data.ccw === false)
+						console.error("CCW")
+					var skip = 0;
+					for ( var i = 0, j = data.coordIndex.length; i < j; i ++ ) {
+						var indexes = data.coordIndex[i];
+						skip = 0;
+						while (indexes.length >= 3 && skip < (indexes.length - 2)) {
+							var a = indexes[0];
+							var b = indexes[skip + (data.ccw ? 1 : 2)];
+							var c = indexes[skip + (data.ccw ? 2 : 1)];
+							skip++;
+							faces.push(a, b, c);
+						}
+					}
+					indices = faces.toString().split(",");
+					var creaseAngle = data.creaseAngle ? data.creaseAngle : 2;
+					return new xeogl.Geometry({
+						primitive: "triangles",
+						positions: new Float32Array(positions),
+						indices: new Uint16Array(indices),
+						autoVertexNormals :true,
+						edgeThreshold:2
+					});
+				}
+				//return parseIndexedFaceSet(data);
 			}
 		}		
 
-		function parseIndexedFaceSet(node){
-			var indexes, uvIndexes, uvs;
-			var vec;
-			var vertices = [];
-			var normals = [];
-			var faces = [];
-			var faceVertexUvs = [];
-			if ( data.texCoord) {
-				uvs = node.texCoord.point;
-			}
 
-			if ( node.coord) {
-				if ( ! uvs ) {
-					uvs = node.coord.point;
-				}
-				for ( var k = 0, l = node.coord.point.length; k < l; k ++ ) {
-					var point = node.coord.point[ k ];
-					//vec = [point.x, point.y, point.z];
-					vertices.push(point.x, point.y, point.z);
-					normals.push(0,0,0);
-				}
-			}
-
-			var skip = 0;
-			// some shapes only have vertices for use in other shapes
-			if ( node.coordIndex ) {
-				// read this: http://math.hws.edu/eck/cs424/notes2013/16_Threejs_Advanced.html
-				for ( var i = 0, j = node.coordIndex.length; i < j; i ++ ) {
-					indexes = node.coordIndex[ i ];
-					if ( node.texCoordIndex && node.texCoordIndex.length && node.texCoordIndex.length>0) {
-						uvIndexes = node.texCoordIndex[ i ];
-					} else {
-						// default texture coord index
-						uvIndexes = indexes;
-					}
-					// vrml supports multipoint indexed face sets (more then 3 vertices). You must calculate the composing triangles here
-					skip = 0;
-					// @todo: see if your can support squares, because they are possible in THREE (if you do, duplicator must also support them!!)
-					// Face3 only works with triangles, but IndexedFaceSet allows shapes with polygons: triangulate them
-					while ( indexes.length >= 3 && skip < ( indexes.length - 2 ) ) {
-						var a = indexes[ 0 ];
-						var b = indexes[ skip + (node.ccw ? 1 : 2) ];
-						var c = indexes[ skip + (node.ccw ? 2 : 1) ];
-						var face = [
-							a,
-							b,
-							c,
-							null // normal, will be added later
-							// todo: pass in the color, if a color index is present
-						];
-						//normals.push(math.norm(math.cross([b-a],[c-a])));
-						//this.log(face);
-						// @todo: this code might have to move till after vertices have been duplicated for sharp edge rendering
-						if ( uvs && uvIndexes ) {
-							faceVertexUvs.push(								
-									uvs[ uvIndexes[ 0 ] ].x,
-									uvs[ uvIndexes[ 0 ] ].y							
-								,								
-									uvs[ uvIndexes[ skip + (node.ccw ? 1 : 2) ] ].x,
-									uvs[ uvIndexes[ skip + (node.ccw ? 1 : 2) ] ].y
-								,								
-									uvs[ uvIndexes[ skip + (node.ccw ? 2 : 1) ] ].x,
-									uvs[ uvIndexes[ skip + (node.ccw ? 2 : 1) ] ].y								
-							);
-						} else {
-							console.log('Missing either uvs or indexes');
-						}
-						skip ++;
-						faces.push(a,b,c);
-
-					}
-
-				}
-
-			}
-
-			var creaseAngle = node.creaseAngle ? node.creaseAngle : false;
-
-			// if no creaseAngle, the VRML author probably wasn't intersted in smooth rendering, so don't!
-			if ( false !== creaseAngle ) {
-				//smooth.smooth(object, creaseAngle);
-				//xeogl.math.faceToVertexNormals(positions, creaseAngle);
-			} else {
-				// only compute face normals, perform no smoothing
-				//var cb =  new Float32Array([0,0,0]), ab =  new Float32Array([0,0,0]);
-				//Flat shading normals
-				//For each triangle ABC
-				/*for ( var k = 0, l = faces.length; k < l; k +=1 ) {
-					var face = faces[ k ];
-					var vA = [vertices[ face ], vertices[ face + 1 ] , vertices[ face + 2 ]];
-					var vB = [vertices[ face ], vertices[ face + 1 ] , vertices[ face + 2 ]]
-					var vC = [vertices[ face ], vertices[ face + 1 ] , vertices[ face + 2 ]]; //cross = [ a2 * b3 - a3 * b2, a3 * b1 - a1 * b3, a1 * b2 - a2 * b1 ]
-					var n = math.cross([1, 1, 0],   [0, 1, 1]) 
-				}*/	
-			}			
-			console.log(vertices);
-			console.log(faces);
-			console.log(faceVertexUvs);
-			console.log(indexes);
-			if (indexes && indexes!= -1)
-				indices = new Uint16Array(indexes);		
-
-			
-			if (indexes && indexes != -1)
-			return new xeogl.Geometry(model, {
-				primitive: "triangles",
-				quantized: false, // Not compressed
-				positions: new Float32Array(vertices),
-				normals: new Float32Array(uvs),
-				//normals: normals && normals.length > 0 ? normals : null,
-				autoNormals: true, //!normals || normals.length === 0,
-				uv: new Float32Array(faceVertexUvs),
-				autoVertexNormals: true,
-				//colors: colors,
-				indices: new Uint16Array(faces)
-			});
-		}
-		
-		
 		function loadMaterial(data,parent,model) {
 			var appearance = data.appearance; //child??
 			if (appearance) {
@@ -402,8 +318,8 @@
 					if (Array.isArray(materialsInfo)){
 						for (var i = 0, len = materialsInfo.length; i < len; i++) {
 							material = loadMaterialColorize(materialInfo[i]); //As option? is not use specularColor						
-							parent.addChild(material);
-							model._addComponent(material);						
+							//parent.addChild(material);
+							model._addComponent(material);
 						}
 					} else {
 						return loadMaterialColorize(materialsInfo); //As option? is not use specularColor							
@@ -416,6 +332,7 @@
 		function loadMaterialColorize(materialInfo) {
 			var mat = new xeogl.LambertMaterial();					
             if (materialInfo.diffuseColor){
+			//	mat.ambient =   [materialInfo.diffuseColor.x,materialInfo.diffuseColor.y, materialInfo.diffuseColor.z]
 				mat.color =   [materialInfo.diffuseColor.x,materialInfo.diffuseColor.y, materialInfo.diffuseColor.z]
 			}
 			
@@ -432,9 +349,12 @@
 			}	
 			return mat;
         }
-		
+
 		function parseNode(data,parent,model) {
 			console.log("Parse an node " + data.node);
+			if (data.name) {
+				console.log("Parse an node " + data.name);
+			}
 			var object = parent;
 			switch(data.node) {
 				case 'Transform' :
@@ -453,19 +373,23 @@
 						object.scale = [ s.x, s.y, s.z ];
 					}
 					if (data.name) {
-						//object.id = data.name;
-						//defines[ object.id ] = object;
+						object.id = data.name;
+						defines[ object.id ] = object;
 					}
-					parent.addChild(object, false); // Don't automatically inherit properties
+					parent.addChild(object); // Don't automatically inherit properties
 					model._addComponent(object);
 					break;
 				case 'Shape':
-					object = addShape(data,parent,model);
-					if (object) {
-						parent.addChild(object, false);
-						model._addComponent(object);
+					shape = addShape(data,parent,model);
+					if (shape) {
+						if (data.name) {
+							shape.id = data.name;
+							defines[ shape.id ] = shape;
+						}
+						parent.addChild(shape);
+						model._addComponent(shape);
 					}
-					break;				
+					break;
 				case 'Light':
 				case 'AmbientLight':
 				case 'PointLight':
@@ -482,12 +406,60 @@
 				default:
 					console.warn(data.node + " type node is not implemented")
 					break;
+				case undefined:
+					console.error("Node is not defined")
+					break;
 			}
 			if (data.children) {
 				for ( var i = 0, l = data.children.length; i < l; i ++ ) {
 					parseNode( data.children[ i ], object,model );
 				}
 			}
+		}
+
+		function parseNodeDefinition(data,model) {
+			if (data.node!= 'Transform' && data.node!= 'Group')
+				return;
+
+			var object = new xeogl.Group();
+			if (data.translation) {
+				var t = data.translation;
+				object.position = [t.x,t.y,t.z]
+			}
+
+			if (data.rotation) {
+				var r = data.rotation;
+				object.quaternion= [ r.x, r.y, r.z , r.w ];
+			}
+			if (data.scale) {
+				var s = data.scale;
+				object.scale = [ s.x, s.y, s.z ];
+			}
+			if (data.name) {
+				object.id = data.name;
+				defines[ object.id ] = object;
+			}
+
+			for (var i = 0, l = data.children.length; i < l; i ++ ) {
+				switch(data.children[ i ].node) {
+					case 'Transform' :
+					case 'Group' :
+						//TBD
+						break;
+					case 'Shape':
+						var shape = addShape(data.children[ i ]);
+						if (shape) {
+							if (data.children[ i ].name) {
+								shape.id = data.children[ i ].name;
+								defines[ shape.id ] = shape;
+							}
+							object.addChild(shape, false);
+							//model._addComponent(shape);
+						}
+						break;
+				}
+			}
+			model._addComponent(object);
 		}
 
 		// Action
@@ -498,15 +470,21 @@
 		for ( var i = 0, l = tree.length; i < l; i ++ ) {
 			parseNode(tree[i],model,model);
 		}
+		console.log(defines);
+		/*for (node in tree.nodeDefinitions){
+			parseNodeDefinition(node,model);
+		}*/
+		//for
 		/*jQuery.each(tree.nodeDefinitions, function() {
 			console.log(this.name);
-			parseNode(this,model,model);
+			parseNodeDefinition(this,model);
 		});*/
 		//forEach
 
        // return ;
 
     }
+
 
 
     function loadFile(url, ok, err) {
